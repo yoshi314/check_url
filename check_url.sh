@@ -46,9 +46,10 @@ STATE_UNKNOWN=3
 URL=""
 TIMEOUT=40
 REGEXP=""
+GREP_OPTS=""
  
 # Parameters processing
-while getopts ":u:t:ho:r:" Option
+while getopts ":u:t:gho:r:" Option
 do
         case $Option in
                 u ) URL=$OPTARG;;
@@ -56,6 +57,7 @@ do
                 h ) print_help;;
                 o ) OPTIONS=$OPTARG;;
                 r ) REGEXP=$OPTARG;;
+		g ) GREP_OPTS="-v";;
                 * ) echo "unimplemented option";;
                 esac
 done
@@ -76,7 +78,7 @@ fi
  
 # Read URL
  
-OUT=`curl $URL $OPTIONS --max-time $TIMEOUT -o $OUTFILE -s --write-out "$CURL_WRITE_OUT"`
+OUT=`curl -k $URL $OPTIONS --max-time $TIMEOUT -o $OUTFILE -s --write-out "$CURL_WRITE_OUT"`
 CURL_STATUS=$?
 # curl return status
 if [ $CURL_STATUS -eq 0 ]
@@ -88,19 +90,23 @@ then
    if [ "$FIRST_CHAR_RETURN_CODE" == "4" ] || [ "$FIRST_CHAR_RETURN_CODE" == "5" ]
    then
      echo "ERROR: $RETURN_CODE code returned while fetching $URL|$PERF"
-     exit STATE_CRITICAL
+     exit $STATE_CRITICAL
    else
      if [ "$REGEXP" ]
      then
-       grep --quiet --ignore-case --regexp=$REGEXP $OUTFILE
+       grep --quiet --ignore-case $GREP_OPTS --regexp=$REGEXP $OUTFILE
        GREP_STATUS=$?
        rm -f $OUTFILE
        if [ $GREP_STATUS -eq 0 ]
        then
-         echo "OK: $URL fetched; return code $RETURN_CODE|$PERF"
+         echo "OK: $URL fetched; expecting $REGEXP; return code $RETURN_CODE|$PERF"
          exit $STATE_OK
        else
-         echo "CRITICAL: No matching content for $URL; return code $RETURN_CODE|$PERF"
+	if [ -n "$GREP_OPTS" ]; then
+	         echo "CRITICAL: Matched regexp $REGEXP for $URL (expecting no match); return code $RETURN_CODE|$PERF"
+	else 
+	         echo "CRITICAL: No matching content for $URL (expecting $REGEXP) ; return code $RETURN_CODE|$PERF"
+	fi
          exit $STATE_CRITICAL
        fi
      else
